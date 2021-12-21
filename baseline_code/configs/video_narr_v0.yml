@@ -1,0 +1,31 @@
+gpu_id: 0
+multi_gpus: True
+num_workers: 2
+seed: 2021
+exp_name: 'expVIDEO-NARR-v0'
+
+train:
+  lr: 0.0001
+  batch_size: 32
+  restore: False
+  max_epochs: 25
+  word_dim: 100 #300
+  module_dim: 512
+  glove: True
+  k_max_frame_level: 16
+  k_max_clip_level: 8
+  spl_resolution: 1
+  model: 'none'
+
+val:
+  flag: True
+
+test:
+  test_num: 0
+  write_preds: True
+
+dataset:
+  name: 'video-narr'
+  question_type: 'none'
+  data_dir: '../feature_file/video-narr'
+  save_dir: 'results/'

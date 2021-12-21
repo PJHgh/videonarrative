@@ -187,6 +187,110 @@ class OutputUnitMultiChoices(nn.Module):
         return out
 
 
+class OutputUnitMultiChoicesWithAttention_v2(nn.Module):
+    def __init__(self, module_dim=512):
+        super(OutputUnitMultiChoicesWithAttention_v2, self).__init__()
+
+        self.question_proj = nn.Linear(module_dim, module_dim)
+
+        self.ans_candidates_proj = nn.Linear(module_dim, module_dim)
+        
+        self.attention = nn.MultiheadAttention(module_dim * 2,
+                                               num_heads=1,
+                                               dropout=0.15,
+                                               batch_first=True)
+        
+        self.classifier = nn.Sequential(nn.Dropout(0.15),
+                                        nn.Linear(module_dim * 2, module_dim),
+                                        nn.ELU(),
+                                        nn.BatchNorm1d(module_dim),
+                                        nn.Dropout(0.15),
+                                        nn.Linear(module_dim, 1))
+
+    def forward(self, question_embedding, q_visual_embedding,
+                     ans_candidates_embedding, a_visual_embedding):
+        """
+        Args:
+            question_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+            q_visual_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+            ans_candidates_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+            a_visual_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+        return:
+            out: [Tensor] (batch_size, module_dim) => (160, 512)
+        """
+        question_embedding = self.question_proj(question_embedding)
+        ans_candidates_embedding = self.ans_candidates_proj(ans_candidates_embedding)
+
+        attn_embedding_q = torch.cat([question_embedding, ans_candidates_embedding], 1)
+        attn_embedding_k = torch.cat([q_visual_embedding, a_visual_embedding], 1)
+        
+        attn_output = self.attention(attn_embedding_q.unsqueeze(1),
+                                       attn_embedding_k.unsqueeze(1),
+                                       attn_embedding_k.unsqueeze(1),
+                                       need_weights=False)[0]
+        
+        out = self.classifier(attn_output.squeeze(1))
+
+        return out
+
+
+class OutputUnitMultiChoicesWithAttention_v1(nn.Module):
+    def __init__(self, module_dim=512):
+        super(OutputUnitMultiChoicesWithAttention_v1, self).__init__()
+
+        self.question_proj = nn.Linear(module_dim, module_dim * 2)
+
+        self.ans_candidates_proj = nn.Linear(module_dim, module_dim)
+        
+        self.q_attention = nn.MultiheadAttention(module_dim * 2,
+                                               num_heads=1,
+                                               dropout=0.15,
+                                               batch_first=True)
+        
+        self.a_attention = nn.MultiheadAttention(module_dim * 2,
+                                               num_heads=1,
+                                               dropout=0.15,
+                                               batch_first=True)
+
+        self.classifier = nn.Sequential(nn.Dropout(0.15),
+                                        nn.Linear(module_dim * 4, module_dim),
+                                        nn.ELU(),
+                                        nn.BatchNorm1d(module_dim),
+                                        nn.Dropout(0.15),
+                                        nn.Linear(module_dim, 1))
+
+    def forward(self, question_embedding, q_visual_embedding,
+                     ans_candidates_embedding, a_visual_embedding):
+        """
+        Args:
+            question_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+            q_visual_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+            ans_candidates_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+            a_visual_embedding: [Tensor] (batch_size, module_dim) => (160, 512)
+        return:
+            out: [Tensor] (batch_size, module_dim) => (160, 512)
+        """
+        question_embedding = self.question_proj(question_embedding)
+        ans_candidates_embedding = self.ans_candidates_proj(ans_candidates_embedding)
+
+        q_attn_embedding = torch.cat([q_visual_embedding, ans_candidates_embedding], 1)
+        q_attn_output = self.q_attention(question_embedding.unsqueeze(1),
+                                       q_attn_embedding.unsqueeze(1),
+                                       q_attn_embedding.unsqueeze(1),
+                                       need_weights=False)[0]
+
+        a_attn_embedding = torch.cat([a_visual_embedding, ans_candidates_embedding], 1)
+        a_attn_output = self.a_attention(question_embedding.unsqueeze(1),
+                                       a_attn_embedding.unsqueeze(1),
+                                       a_attn_embedding.unsqueeze(1),
+                                       need_weights=False)[0]
+        
+        out = torch.cat([q_attn_output.squeeze(1), a_attn_output.squeeze(1)], 1)
+        out = self.classifier(out)
+
+        return out
+
+
 class OutputUnitCount(nn.Module):
     def __init__(self, module_dim=512):
         super(OutputUnitCount, self).__init__()
@@ -215,7 +319,25 @@ class HCRNNetwork(nn.Module):
         self.question_type = question_type
         self.feature_aggregation = FeatureAggregation(module_dim)
 
-        if self.question_type in ['action', 'transition','none']:
+        if self.model_name in ['none']:
+            encoder_vocab_size = len(vocab['question_answer_token_to_idx'])
+            self.linguistic_input_unit = InputUnitLinguistic(vocab_size=encoder_vocab_size, wordvec_dim=word_dim,
+                                                             module_dim=module_dim, rnn_dim=module_dim)
+            self.visual_input_unit = InputUnitVisual(k_max_frame_level=k_max_frame_level, k_max_clip_level=k_max_clip_level, spl_resolution=spl_resolution, vision_dim=vision_dim, module_dim=module_dim)
+            self.output_unit = OutputUnitMultiChoices(module_dim=module_dim)
+        elif self.model_name in ['attention_v1']:
+            encoder_vocab_size = len(vocab['question_answer_token_to_idx'])
+            self.linguistic_input_unit = InputUnitLinguistic(vocab_size=encoder_vocab_size, wordvec_dim=word_dim,
+                                                             module_dim=module_dim, rnn_dim=module_dim)
+            self.visual_input_unit = InputUnitVisual(k_max_frame_level=k_max_frame_level, k_max_clip_level=k_max_clip_level, spl_resolution=spl_resolution, vision_dim=vision_dim, module_dim=module_dim)
+            self.output_unit = OutputUnitMultiChoicesWithAttention_v1(module_dim=module_dim)
+        elif self.model_name in ['attention_v2']:
+            encoder_vocab_size = len(vocab['question_answer_token_to_idx'])
+            self.linguistic_input_unit = InputUnitLinguistic(vocab_size=encoder_vocab_size, wordvec_dim=word_dim,
+                                                             module_dim=module_dim, rnn_dim=module_dim)
+            self.visual_input_unit = InputUnitVisual(k_max_frame_level=k_max_frame_level, k_max_clip_level=k_max_clip_level, spl_resolution=spl_resolution, vision_dim=vision_dim, module_dim=module_dim)
+            self.output_unit = OutputUnitMultiChoicesWithAttention_v2(module_dim=module_dim)
+        elif self.question_type in ['action', 'transition','none']:
             encoder_vocab_size = len(vocab['question_answer_token_to_idx'])
             self.linguistic_input_unit = InputUnitLinguistic(vocab_size=encoder_vocab_size, wordvec_dim=word_dim,
                                                              module_dim=module_dim, rnn_dim=module_dim)

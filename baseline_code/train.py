@@ -70,7 +70,8 @@ def train(cfg):
         'k_max_clip_level': cfg.train.k_max_clip_level,
         'spl_resolution': cfg.train.spl_resolution,
         'vocab': train_loader.vocab,
-        'question_type': cfg.dataset.question_type
+        'question_type': cfg.dataset.question_type,
+        'model_name': cfg.train.model
     }
     model_kwargs_tosave = {k: v for k, v in model_kwargs.items() if k != 'vocab'}
     model = HCRN.HCRNNetwork(**model_kwargs).to(device)
