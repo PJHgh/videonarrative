@@ -1,4 +1,4 @@
-# 2021 [한국어 질의응답 AI 경진대회](http://ai-competition.kaist.ac.kr/competitions/outline) - Baseline 코드 안내
+# 2021 [한국어 질의응답 AI 경진대회](http://ai-competition.kaist.ac.kr/competitions/outline)
 
 ## 0. 필요한 라이브러리 설치
 
@@ -281,6 +281,23 @@ dataset:
 ```
 
 - Ensemble
-```
+```python
+import json
+from scipy.stats import mode
 
+with open("output1.json", "r") as f:
+    file_1 = json.load(f)
+    
+with open("output2.json", "r") as f:
+    file_2 = json.load(f)
+    
+with open("output3.json", "r") as f:
+    file_3 = json.load(f)
+    
+result = {}
+for k in file_1.keys():
+    result[str(k)] = int(mode([file_1[k], file_2[k], file_3[k]]).mode[0])
+    
+with open('submission.json','w') as f:
+    json.dump(result,f)
 ```
