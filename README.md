@@ -12,6 +12,19 @@
 ## 2. feature 추출 진행
 
 - [raw data](https://drive.google.com/file/d/1fbMB1XQvJCa2ODV0ssHYSlSXGf1fe13E/view?usp=sharing)    
+- Train data의 경우 주최즉에서 제공한 Feature data 활용
+- Test data question feature 추출
+```bash
+python3 preprocess/preprocess_questions.py --dataset video-narr --glove_pt 'glove.korean.pkl dir' --mode test --video_dir <test video dir> --output_pt '../feature_file/video-narr/video-narr_test_questions.pt'
+```
+- Test data appearance feature 추출
+```bash
+python3 preprocess/preprocess_features.py --gpu_id 0 --dataset video-narr --model resnet101 --video_dir <test video dir> 
+```
+- Test data motion feature 추출
+```bash
+python3 preprocess/preprocess_features.py --gpu_id 0 --dataset video-narr --model resnext101 --image_height 224 --image_width 224 --video_dir <test video dir>
+```
 
 ## 3. 학습 진행
 
