@@ -1,8 +1,5 @@
 # 2021 [한국어 질의응답 AI 경진대회](http://ai-competition.kaist.ac.kr/competitions/outline)
 
-## 0. 필요한 라이브러리 설치
-
-
 ## 1. Train Data Download
 다운받은 data는 "feature_file/video-narr/"에 위치 시켜주세요.
 
