@@ -1,8 +1,32 @@
+preprocess_features_alb.py
+액세스 권한이 있는 사용자
+류
+­
+시스템 속성
+유형
+텍스트
+크기
+15KB
+사용한 용량
+15KB
+위치
+preprocess
+소유자
+나
+수정 날짜
+2021. 12. 15.에 내가 수정
+열어 본 날짜
+오후 12:43에 내가 열어 봄
+생성 날짜
+2021. 12. 15.에 Google Drive for desktop 사용
+설명 추가
+뷰어가 다운로드할 수 있음
 import argparse, os
 import h5py
 from scipy.misc import imresize
 import skvideo.io
 from PIL import Image
+import cv2
 
 import torch
 from torch import nn
@@ -15,6 +39,8 @@ from models import densenet
 from datautils import utils
 from datautils import video_narr
 from tqdm import tqdm
+import albumentations
+import albumentations.pytorch
 
 def build_resnet():
     if not hasattr(torchvision.models, args.model):
@@ -40,6 +66,21 @@ def build_resnext():
     model.eval()
     return model
 
+
+albumentations_transform = albumentations.Compose([
+    albumentations.Resize(256, 256), 
+    albumentations.RandomCrop(224, 224),
+    albumentations.OneOf([
+      albumentations.RandomGamma(gamma_limit=(80, 120), p=0.5),
+      albumentations.RandomBrightness(limit=0.2, p=0.5),
+      albumentations.HueSaturationValue(hue_shift_limit=5, sat_shift_limit=20,
+                      val_shift_limit=10, p=.9),
+      albumentations.ShiftScaleRotate(
+      shift_limit=0.0625, scale_limit=0.1, 
+      rotate_limit=15, border_mode=cv2.BORDER_REFLECT_101, p=0.8), 
+      albumentations.RandomContrast(limit=0.2, p=0.5)]),
+    albumentations.pytorch.transforms.ToTensor()])
+        
 
 
 def run_batch(cur_batch, model):
@@ -114,22 +155,28 @@ def extract_clips_with_consecutive_frames(path, num_clips, num_frames_per_clip):
                 clip = np.concatenate((clip, added_frames), axis=0)
         new_clip = []
         for j in range(num_frames_per_clip):
+        
             frame_data = clip[j]
-            img = Image.fromarray(frame_data)
-            img = imresize(img, img_size, interp='bicubic')
-            print(img.shape)
-
+            img = Image.fromarray(frame_data).convert('RGB')
+            # print(f'{str(j).zfill(5)} : ','albumentations')
+            # print(img)
+            # print(type(img))
+            img = albumentations_transform(image=np.array(img))
+            # print(type(img))
+            # print(img.keys())
+            # print(img['image'].size())
+            img = imresize(img['image'], img_size, interp='bicubic')
+            # img = img['image'].transpose(2, 0, 1)[None]
             img = img.transpose(2, 0, 1)[None]
-            print(img.shape)
-
+            # print(img.shape)
+            # break
             frame_data = np.array(img)
             new_clip.append(frame_data)
         new_clip = np.asarray(new_clip)  # (num_frames, width, height, channels)
         if args.model in ['resnext101']:
             new_clip = np.squeeze(new_clip)
             new_clip = np.transpose(new_clip, axes=(1, 0, 2, 3))
-            print(img.shape)
-
+        # print(new_clip.shape)
         clips.append(new_clip)
     return clips, valid
 
@@ -250,7 +297,7 @@ if __name__ == '__main__':
     # output
     parser.add_argument('--out', dest='outfile',
                         help='output filepath',
-                        default="data/{}/{}_{}_feat.h5", type=str)
+                        default="data/{}/{}_{}_feat_TTA.h5", type=str)
     # image sizes
     parser.add_argument('--num_clips', default=8, type=int)
     parser.add_argument('--image_height', default=224, type=int)
